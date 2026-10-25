@@ -1,31 +1,31 @@
 # Game Engine FInite State Machine Specification
 
-'''mermaid
+```mermaid
 stateDiagram-v2
     [*] --> INIT
 
     INIT --> WAITING_FOR_PLAYERS : Server starts and begins listening for clients
 
     WAITING_FOR_PLAYERS --> WAITING_FOR_PLAYERS : Player 1 sends CONNECT / Send LOBBY_WAIT
-    WAITING_FOR_PLAYERS --> WAITING_FOR_PLAYERS : Player 2 CONNECT / Assign Player 1 and Player 2 roles
+    WAITING_FOR_PLAYERS --> GAME_START : Player 2 CONNECT / Assign Player 1 and Player 2 roles
     WAITING_FOR_PLAYERS --> CLEANUP : Connected client disconnects
 
     GAME_START --> PLAYER_TURN : Send GAME_START and first STATE_UPDATE
 
     PLAYER_TURN --> EVALUATE_MOVE : Valid MOVE receieved from active player
-    PLAYER_TURN --> PLAYER_TURN : Invalid or out of turn MOVE / Send ERROR
-    PLAYER_TURN --> GAME_OVER : Client disconnects / Remaining player wins by forfeit
+    PLAYER_TURN --> PLAYER_TURN : Out of turn MOVE/ Send ERROR to keep current turn
+    PLAYER_TURN --> PLAYER_TURN : Invalid MOVE / Send ERROR and allow retry
+    PLAYER_TURN --> GAME_OVER : Abrupt disconnect or 0-byte EOF or socket failure / Remaining player wins by forfeit
 
     EVALUATE_MOVE --> PLAYER_TURN : Questions remain / Send over next STATE_UPDATE
     EVALUATE_MOVE --> GAME_OVER : Final question comepleted / send over GAME_OVER
 
-    GAME_OVER --> CLEANUP : Final result delivered
+    GAME_OVER --> CLEANUP : Final result delivered / End current game
 
-    CLEANUP --> WAITING_FOR_PLAYERS : Reset game and wait for new players
+    CLEANUP --> WAITING_FOR_PLAYERS : Clear game data and reset for new game
     CLEANUP --> [*] : Server shutdown
 
-'''
-
+```
 ##FSM State Description
 
 * **INIT:** The server initializes and begins listening for client connections
