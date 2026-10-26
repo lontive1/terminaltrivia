@@ -141,3 +141,5 @@ Both players receive the same updated scores, current turn, and game progress. S
 
 If a player disconnects during the game the server detects the `DISCONNECT` message a 0 byte EOF or a socket error, THe remaining player wins by forgeit and receives a `GAME_OVER`. After the game ends the server clears the game data and returns to `WAITING_FOR_PLAYERS`.
 
+The server stores both players' scores in a shared score dictionary using each player ID as the key. After a valid answer is evaluated, the server updates the score dictionary and then includes the updated scores in the STATE_UPDATE message sent to both players. Both players receive the same score table, which keeps the leaderboard synchronized after each completed turn.
+
