@@ -20,7 +20,7 @@ Server uses an event loop to check which client sockets are ready to send or rec
 
 6. **Game Reset:** After  `GAME_OVER`, the server clears the current game information and returns to `WAITING_FOR_PLAYERS` so another game can begin.
 
-## 3, Handling Multiple Clients
+## 3. Handling Multiple Clients
 
 The server uses `selectors.DefaultSelector()` to be able to monitor multiple client sockets at the same time. Instead of waiting for one client to finish before checking another, the event loop processses sockets whenever they are ready.
 
@@ -28,7 +28,8 @@ Each client has its own receive buffer to handle incomplete TCP messages and a s
 
 The server then monitors soclets for reading and enables write monitoring when a client has outgoing data. If a message cannot be sent completely the remaining byes stay in that clients send buffer until the socket is ready again.
 
-Terminal trivia supports two active players per game. Additional connectinos are handled without blocking the server and also are not assigned an active player role while the game is in progress.
+Terminal Trivia supports two active players per game. The server can accept additional connections without blocking, but only two clients can have active player roles at a time. Any additional clients are kept separate from the current game and cannot submit moves or change the game state.
+
 
 
 ## 4. Thread Safety and State Isolation
@@ -61,4 +62,82 @@ Only the servers even loop can update the shared game information. Clients cant 
 
 After a valid move the server queues a `STATE_UPDATE` message for both players containing the update scores, game state, and current turn. This helps keep both players synchronized!
 
+## 7. Mermaid Sequence Diagram
+
+This diagram shows how both players connect to the server, take turns asnwerung trivia questions and receive game updates. The server uses the selectors event loop to process messages one at a time.
+
+
+
+
+```mermaid
+sequenceDiagram
+    participant P1 as Player 1
+    participant S as Server
+    participant P2 as Player 2
+
+    P1->>S: CONNECT
+    S-->>P1: LOBBY_WAIT
+    P2->>S: CONNECT
+    S-->>P1: GAME_START
+    S-->>P2: GAME_START
+    S-->>P1: STATE_UPDATE - First question, scores, and active player
+    S-->>P2: STATE_UPDATE - First question, scores, and active player
+
+    alt Game finishes normally
+        loop Each trivia turn until final question
+            alt Player 1 is active
+                alt Player 2 sends an out-of-turn move
+                    P2->>S: MOVE
+                    S-->>P2: ERROR - Not your turn
+                else Player 1 sends a move
+                    P1->>S: MOVE
+                    alt Invalid or malformed answer
+                        S-->>P1: ERROR - Invalid selection
+                    else Valid answer
+                        S->>S: Validate answer and update scores and turn
+                        S-->>P1: STATE_UPDATE - Updated scores and active player
+                        S-->>P2: STATE_UPDATE - Updated scores and active player
+                    end
+                end
+            else Player 2 is active
+                alt Player 1 sends an out-of-turn move
+                    P1->>S: MOVE
+                    S-->>P1: ERROR - Not your turn
+                else Player 2 sends a move
+                    P2->>S: MOVE
+                    alt Invalid or malformed answer
+                        S-->>P2: ERROR - Invalid selection
+                    else Valid answer
+                        S->>S: Validate answer and update scores and turn
+                        S-->>P1: STATE_UPDATE - Updated scores and active player
+                        S-->>P2: STATE_UPDATE - Updated scores and active player
+                    end
+                end
+            end
+        end
+        S-->>P1: GAME_OVER - Final scores and winner
+        S-->>P2: GAME_OVER - Final scores and winner
+    else Player 1 disconnects during game
+        P1->>S: DISCONNECT
+        S-->>P2: GAME_OVER - Player 2 wins by forfeit
+    else Player 2 disconnects during game
+        P2->>S: DISCONNECT
+        S-->>P1: GAME_OVER - Player 1 wins by forfeit
+    else Player 1 connection is lost
+        S-->>P2: GAME_OVER - Player 2 wins by forfeit
+    else Player 2 connection is lost
+        S-->>P1: GAME_OVER - Player 1 wins by forfeit
+    end
+```
+
+
+## 8. Move Validation and State Broadcast
+
+When a player sends a `MOVE`, the server checks if it is their turn and whether the answer is valid. If the move is out of turn or invalid, the server sends an  `ERROR` to that player without changing the current turn or scores. The player can try again when its their turn.
+
+For a valid move the server evaluates the asnwer, updates the players score and cahnges the active turn. The updated game information is then placed into both players' send buffers as a `STATE_UPDATE` message.
+
+Both players receive the same updated scores, current turn, and game progress. Since the server uses a simgle threaded event loop, these updatesare processed in order without two players changing the game state at the same time.
+
+If a player disconnects during the game the server detects the `DISCONNECT` message a 0 byte EOF or a socket error, THe remaining player wins by forgeit and receives a `GAME_OVER`. After the game ends the server clears the game data and returns to `WAITING_FOR_PLAYERS`.
 
