@@ -60,3 +60,5 @@ Each client has its own socket, plater ID, receive buffer and send buffer. This 
 Only the servers even loop can update the shared game information. Clients cant directly change scores, turns, or game progress.
 
 After a valid move the server queues a `STATE_UPDATE` message for both players containing the update scores, game state, and current turn. This helps keep both players synchronized!
+
+
